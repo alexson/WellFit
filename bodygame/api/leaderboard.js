@@ -1,4 +1,4 @@
-const { getAllScores } = require('./_redis')
+const { getAllScores } = require('./_db')
 
 function buildLeaderboard(scores) {
   const countryMap = {}

@@ -4,8 +4,7 @@ Deploy this app with the Vercel project root set to `bodygame/`.
 
 ## Required env vars
 
-- `UPSTASH_REDIS_REST_URL`
-- `UPSTASH_REDIS_REST_TOKEN`
+- `DATABASE_URL` - Render Postgres external database URL
 
 ## Deploy settings
 
@@ -18,6 +17,15 @@ Deploy this app with the Vercel project root set to `bodygame/`.
 
 - Static pages are served directly from this folder.
 - Serverless API routes live in `api/`.
-- Local-only files such as `cert.pem`, `key.pem`, `package.json`, `server.js`, and `scores.json` are excluded by `.vercelignore`.
-- `package.json` is excluded so Vercel does not try to find a Node server entrypoint for the static app.
+- Local-only files such as `cert.pem`, `key.pem`, `server.js`, and `scores.json` are excluded by `.vercelignore`.
 - `vercel.json` also overrides Vercel settings for this subproject: `framework: null` (`Other`), `buildCommand: null`, and `outputDirectory: "."`.
+- `package.json` is deployed because Vercel Functions need the `pg` package to connect to Render Postgres.
+
+## Render Postgres
+
+1. Create a Render Postgres database.
+2. Copy its external database URL.
+3. Add that URL to this Vercel project as `DATABASE_URL`.
+4. Redeploy the Vercel project.
+
+The API creates the `scores` table automatically on first request.

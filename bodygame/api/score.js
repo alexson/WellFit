@@ -1,4 +1,4 @@
-const { pushScore, getAllScores } = require('./_redis')
+const { hasSessionToken, pushScore } = require('./_db')
 
 const VALID_COUNTRIES = new Set([
   'AF','AL','DZ','AO','AR','AM','AU','AT','AZ','BH','BD','BY','BE','BO','BA',
@@ -56,8 +56,7 @@ module.exports = async function handler(req, res) {
 
     // Deduplicate by sessionToken
     if (sessionToken) {
-      const existing = await getAllScores()
-      if (existing.some(s => s.sessionToken === sessionToken)) {
+      if (await hasSessionToken(sessionToken)) {
         res.status(409).json({ error: 'Already submitted' })
         return
       }
@@ -76,6 +75,10 @@ module.exports = async function handler(req, res) {
     await pushScore(entry)
     res.status(200).json({ ok: true, id: entry.id })
   } catch (e) {
+    if (e && e.code === '23505') {
+      res.status(409).json({ error: 'Already submitted' })
+      return
+    }
     res.status(500).json({ error: String(e) })
   }
 }
