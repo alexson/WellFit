@@ -1,4 +1,7 @@
 cert.pem
 key.pem
+# Local-only Node server metadata. Vercel should deploy this project as
+# static files plus /api serverless functions, not as a Node server.
+package.json
 server.js
 scores.json
