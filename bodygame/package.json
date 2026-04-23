@@ -1,0 +1,12 @@
+{
+  "name": "move-it-bodygame",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Move it! Move it! browser game deployment for Vercel",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev:https": "node server.js"
+  }
+}

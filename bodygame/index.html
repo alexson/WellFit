@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Move it! Move it!</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .https-notice {
+      background: rgba(255,200,0,0.12);
+      border: 1px solid rgba(255,200,0,0.3);
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 0.82rem;
+      color: #ccaa44;
+      max-width: 480px;
+      text-align: center;
+      display: none;
+      margin-bottom: 24px;
+    }
+    .https-notice.visible { display: block; }
+
+    .leaderboard-section {
+      width: 100%;
+      max-width: 1120px;
+      margin: 40px auto 0;
+      padding: 0 20px 40px;
+      box-sizing: border-box;
+    }
+
+    .leaderboard-heading {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: #8899bb;
+      text-transform: uppercase;
+      margin: 0 0 14px;
+    }
+
+    #leaderboard-container {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 22px;
+      padding: 20px;
+      min-height: 80px;
+      box-shadow: 0 22px 50px rgba(0,0,0,0.28);
+    }
+  </style>
+</head>
+<body class="index-body">
+  <main class="index-shell">
+    <section class="index-hero">
+      <div class="index-kicker">Camera playground</div>
+      <h1 class="index-title" aria-label="Move it! Move it!">
+        <span class="index-title__row" aria-hidden="true">
+          <span class="index-title__word">
+            <span class="index-letter" style="--letter-delay:0ms">M</span>
+            <span class="index-letter" style="--letter-delay:70ms">o</span>
+            <span class="index-letter" style="--letter-delay:140ms">v</span>
+            <span class="index-letter" style="--letter-delay:210ms">e</span>
+          </span>
+          <span class="index-title__word index-title__word--accent">
+            <span class="index-letter" style="--letter-delay:320ms">i</span>
+            <span class="index-letter" style="--letter-delay:390ms">t</span>
+            <span class="index-letter" style="--letter-delay:460ms">!</span>
+          </span>
+        </span>
+        <span class="index-title__row" aria-hidden="true">
+          <span class="index-title__word">
+            <span class="index-letter" style="--letter-delay:530ms">M</span>
+            <span class="index-letter" style="--letter-delay:600ms">o</span>
+            <span class="index-letter" style="--letter-delay:670ms">v</span>
+            <span class="index-letter" style="--letter-delay:740ms">e</span>
+          </span>
+          <span class="index-title__word index-title__word--accent">
+            <span class="index-letter" style="--letter-delay:850ms">i</span>
+            <span class="index-letter" style="--letter-delay:920ms">t</span>
+            <span class="index-letter" style="--letter-delay:990ms">!</span>
+          </span>
+        </span>
+      </h1>
+      <p class="index-subtitle">Move your body, pick a challenge, and jump straight into the camera.</p>
+
+      <div id="profile-widget" class="profile-widget" style="display:none;">
+        <span id="profile-label" style="flex:1;"></span>
+        <button id="profile-edit-btn" style="padding:5px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.08);color:#fff;font-size:0.82rem;cursor:pointer;font-family:inherit;">Edit</button>
+      </div>
+
+      <div class="https-notice" id="httpsNotice">
+        ⚠️ Camera access requires HTTPS. Use a local HTTPS server or ngrok.
+      </div>
+    </section>
+
+    <section class="game-cards" aria-label="Game selection">
+      <a href="pose-mirror.html" class="game-card game-card--mirror">
+        <span class="card-icon">🪞</span>
+        <div class="card-title-en">POSE MIRROR</div>
+        <div class="card-desc">
+          Match the target pose — scored on joint angle accuracy. 8 rounds · ~2 min
+        </div>
+        <span class="card-badge badge-mirror">8 rounds · ~2 min</span>
+      </a>
+
+      <a href="bodyware.html" class="game-card game-card--bodyware">
+        <span class="card-icon">⚡</span>
+        <div class="card-title-en">BODYWARE</div>
+        <div class="card-desc">
+          WarioWare-style microgames. Duck! Freeze! Catch! Your whole body is the controller. 3 lives · endless
+        </div>
+        <span class="card-badge badge-bodyware">3 lives · endless</span>
+      </a>
+
+      <div class="game-card game-card--disabled" aria-disabled="true">
+        <span class="card-icon">❓</span>
+        <div class="card-title-en">COMING SOON</div>
+        <div class="card-desc">
+          A new game mode is on the way… stay tuned!
+        </div>
+      </div>
+    </section>
+
+    <p class="index-footer">
+      Camera access required<br>
+      <a href="#" onclick="showSetupTips(); return false">Setup tips</a>
+    </p>
+
+    <section class="leaderboard-section">
+      <h2 class="leaderboard-heading">LEADERBOARD</h2>
+      <div id="leaderboard-container"></div>
+    </section>
+
+    <footer class="index-credit">
+      Created by <a href="https://www.designium.jp/xr" target="_blank" rel="noreferrer">designium</a>
+    </footer>
+  </main>
+
+  <script src="js/leaderboard.js"></script>
+  <script>
+    const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
+    if (location.protocol !== 'https:' && !isLocalhost) {
+      document.getElementById('httpsNotice').classList.add('visible')
+    }
+
+    // Clear legacy score data
+    localStorage.removeItem('bodygame_scores')
+
+    function refreshProfileWidget() {
+      const p = LB.getProfile()
+      const widget = document.getElementById('profile-widget')
+      const label  = document.getElementById('profile-label')
+      if (p?.name && p?.country) {
+        label.textContent = `${LB.flag(p.country)}  ${p.name}`
+        widget.style.display = 'flex'
+      } else {
+        widget.style.display = 'none'
+      }
+    }
+
+    document.getElementById('profile-edit-btn').addEventListener('click', () => {
+      LB.editProfile().then(() => {
+        refreshProfileWidget()
+        LB.renderLeaderboard(document.getElementById('leaderboard-container'))
+      })
+    })
+
+    // Prompt for profile if not set, then show widget
+    LB.ensureProfile().then(() => refreshProfileWidget())
+
+    // Load leaderboard
+    LB.renderLeaderboard(document.getElementById('leaderboard-container'))
+
+    function showSetupTips() {
+      alert(
+        '📷 Setup Tips\n\n' +
+        '1. Play in a well-lit environment\n\n' +
+        '2. Stand 1–2m from camera so your full body is visible\n\n' +
+        '3. For local dev: npx serve --ssl, or use ngrok\n\n' +
+        '4. Chrome or Edge recommended (MediaPipe GPU support)'
+      )
+    }
+  </script>
+</body>
+</html>

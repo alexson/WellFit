@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BodyWare | Move it! Move it!</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    #backBtn {
+      position: fixed;
+      top: 10px; left: 10px;
+      z-index: 50;
+      background: rgba(18, 33, 76, 0.84);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-family: inherit;
+      transition: background 0.15s, transform 0.15s;
+      box-shadow: 0 10px 22px rgba(8, 14, 38, 0.28);
+    }
+    #backBtn:hover { background: rgba(255, 95, 109, 0.92); transform: translateY(-1px); }
+    @media (max-width: 700px) {
+      #backBtn { top: 12px; left: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <button id="backBtn" onclick="location.href='index.html'">← Back</button>
+
+  <div id="loadingScreen">
+    <h2>Loading…</h2>
+    <div class="spinner"></div>
+    <ul class="loading-steps">
+      <li id="step-camera" class="active">📷 Connecting camera…</li>
+      <li id="step-model">🤖 Loading AI model…</li>
+      <li id="step-ready">✅ Ready</li>
+    </ul>
+    <div id="modelProgress">
+      <div id="modelProgressTrack"><div id="modelProgressFill"></div></div>
+      <div id="modelProgressLabel">0%</div>
+    </div>
+    <div id="readyPanel" class="ready-panel">
+      <p>Camera is connected and the pose model is ready. Start when you are set for the first microgame.</p>
+      <button id="startBtn" class="start-button" type="button">Start Game</button>
+    </div>
+  </div>
+
+  <div id="errorScreen">
+    <h2>Error</h2>
+    <p id="errorMsg"></p>
+    <p><a onclick="location.reload()">Reload</a> &nbsp;|&nbsp; <a href="index.html">Back to home</a></p>
+  </div>
+
+  <div class="game-container" id="gameContainer" style="display:none">
+    <video id="video" playsinline muted></video>
+    <canvas id="gameCanvas"></canvas>
+  </div>
+
+  <!-- Game scripts (non-module, define globals) -->
+  <script src="js/leaderboard.js"></script>
+  <script src="js/pose-engine.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/data/microgames.js"></script>
+  <script src="js/bodyware.js"></script>
+
+  <script type="module">
+    import { FilesetResolver, PoseLandmarker }
+      from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/vision_bundle.mjs'
+
+    window.FilesetResolver = FilesetResolver
+    window.PoseLandmarker  = PoseLandmarker
+
+    const step = (id, state) => {
+      const el = document.getElementById(id)
+      if (el) el.className = state
+    }
+
+    const showError = (msg) => {
+      document.getElementById('loadingScreen').style.display = 'none'
+      const err = document.getElementById('errorScreen')
+      err.classList.add('visible')
+      document.getElementById('errorMsg').textContent = msg
+    }
+
+    async function init() {
+      const video  = document.getElementById('video')
+      const canvas = document.getElementById('gameCanvas')
+      const readyPanel = document.getElementById('readyPanel')
+      const spinner = document.querySelector('#loadingScreen .spinner')
+      const startBtn = document.getElementById('startBtn')
+      let game = null
+
+      step('step-camera', 'active')
+      const engine = new PoseEngine(video, canvas)
+      try {
+        await engine.startCamera()
+        step('step-camera', 'done')
+      } catch (e) {
+        showError('Camera access denied. Please allow camera access in your browser settings.\n' + e.message)
+        return
+      }
+
+      step('step-model', 'active')
+      const progressEl  = document.getElementById('modelProgress')
+      const fillEl      = document.getElementById('modelProgressFill')
+      const labelEl     = document.getElementById('modelProgressLabel')
+      progressEl.classList.add('visible')
+
+      try {
+        await engine.init((progress) => {
+          if (progress < 0) {
+            fillEl.classList.add('indeterminate')
+            labelEl.textContent = 'Loading…'
+          } else {
+            fillEl.classList.remove('indeterminate')
+            fillEl.style.width = (progress * 100).toFixed(1) + '%'
+            labelEl.textContent = (progress * 100).toFixed(0) + '%'
+          }
+        })
+        fillEl.style.width = '100%'
+        labelEl.textContent = '100%'
+        step('step-model', 'done')
+      } catch (e) {
+        showError('Failed to load AI model. Check your internet connection.\n' + e.message)
+        return
+      }
+
+      step('step-ready', 'active')
+      step('step-ready', 'done')
+      document.querySelector('#loadingScreen h2').textContent = 'Ready'
+      spinner.style.display = 'none'
+      readyPanel.classList.add('visible')
+
+      startBtn.addEventListener('click', async () => {
+        startBtn.disabled = true
+        startBtn.textContent = 'Starting…'
+        await LB.ensureProfile()
+        const sessionToken = LB.makeSessionToken()
+        const sessionStartedAt = Date.now()
+        document.getElementById('loadingScreen').style.display = 'none'
+        document.getElementById('gameContainer').style.display = 'flex'
+        try {
+          engine.start()
+          game = new BodyWareGame(engine, canvas, { sessionToken, sessionStartedAt })
+          await game.start()
+        } catch (e) {
+          showError(String(e))
+        }
+      }, { once: true })
+    }
+
+    init().catch(e => showError(String(e)))
+  </script>
+</body>
+</html>
