@@ -461,7 +461,8 @@ function triggerConfetti() {
   const ctx = cvs.getContext('2d')
 
   const COLORS = ['#ff6b6b','#ffd700','#7cff6b','#6bbbff','#c46bff','#ff9f43','#6bffe8','#ff6bbd','#fff06b']
-  const N = 180
+  const isMobile = window.innerWidth < 768 || navigator.maxTouchPoints > 1
+  const N = isMobile ? 60 : 180
   const particles = Array.from({ length: N }, () => ({
     x:    Math.random() * cvs.width,
     y:    -20 - Math.random() * cvs.height * 0.4,

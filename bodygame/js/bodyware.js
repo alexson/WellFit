@@ -435,6 +435,7 @@ class BodyWareGame {
     this._replayChunks = []
     this._replayUrl = null
     this._replayReady = false
+    this._replaySupported = false
     this._replayVideoEl = null
     UI.initGameUI(this.canvas, 'bodyware')
 
@@ -811,6 +812,7 @@ class BodyWareGame {
   }
 
   _startReplayCapture() {
+    this._replaySupported = false
     if (!this.canvas.captureStream || typeof MediaRecorder === 'undefined') return
 
     this._replayReady = false
@@ -822,14 +824,18 @@ class BodyWareGame {
 
     try {
       this._replayStream = this.canvas.captureStream(30)
-      this._replayStopPending = false
+      // Some mobile browsers return an empty/inert stream — bail out early.
+      if (!this._replayStream?.getTracks?.().length) return
+
       const mimeType = [
         'video/webm;codecs=vp9',
         'video/webm;codecs=vp8',
         'video/webm',
       ].find((type) => MediaRecorder.isTypeSupported?.(type)) || ''
+      if (!mimeType) return  // no supported codec → skip replay on this device
 
-      this._replayRecorder = new MediaRecorder(this._replayStream, mimeType ? { mimeType } : undefined)
+      this._replayRecorder = new MediaRecorder(this._replayStream, { mimeType })
+      this._replaySupported = true  // recorder created successfully
       this._replayRecorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) this._replayChunks.push(event.data)
       }
@@ -844,7 +850,9 @@ class BodyWareGame {
         this._mountReplayIntoGameOver()
       }
       this._replayRecorder.start()
-    } catch {}
+    } catch {
+      this._replaySupported = false
+    }
   }
 
   _stopReplayCapture() {
@@ -886,16 +894,6 @@ class BodyWareGame {
       <div class="game-over-meta">${this.gamesPlayed >= this.highScore ? 'New record' : `High score: ${this.highScore}`}</div>
     `
 
-    const replayPanel = document.createElement('div')
-    replayPanel.className = 'game-over-replay'
-    replayPanel.innerHTML = `<div class="game-over-replay-label">Replay</div><div class="game-over-replay-loading">Preparing replay…</div>`
-
-    const replayBtn = document.createElement('button')
-    replayBtn.className = 'game-over-btn'
-    replayBtn.textContent = 'Replay'
-    replayBtn.disabled = true
-    replayBtn.addEventListener('click', () => this._playReplay())
-
     const playAgain = document.createElement('button')
     playAgain.className = 'game-over-btn primary'
     playAgain.textContent = 'Play again'
@@ -906,7 +904,24 @@ class BodyWareGame {
     home.textContent = 'Back home'
     home.addEventListener('click', () => { location.href = 'index.html' })
 
-    wrap.append(summary, replayPanel, replayBtn, playAgain, home)
+    wrap.append(summary)
+
+    // Only show replay UI when the browser actually supports canvas recording.
+    if (this._replaySupported) {
+      const replayPanel = document.createElement('div')
+      replayPanel.className = 'game-over-replay'
+      replayPanel.innerHTML = `<div class="game-over-replay-label">Replay</div><div class="game-over-replay-loading">Preparing replay…</div>`
+
+      const replayBtn = document.createElement('button')
+      replayBtn.className = 'game-over-btn'
+      replayBtn.textContent = 'Replay'
+      replayBtn.disabled = true
+      replayBtn.addEventListener('click', () => this._playReplay())
+
+      wrap.append(replayPanel, replayBtn)
+    }
+
+    wrap.append(playAgain, home)
     parent.appendChild(wrap)
     this._gameOverDom = wrap
     this._mountReplayIntoGameOver()
