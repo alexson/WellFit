@@ -7,8 +7,8 @@ const BW_CONFIG = {
   LIVES: 3,
   FLASH_MS: 1200,
   BASE_TIME_MS: 5000,
-  TIME_REDUCTION: 200,
-  MIN_TIME_MS: 2000,
+  TIME_REDUCTION: 1000,
+  MIN_TIME_MS: 1500,
   SPEED_UP_EVERY: 5,
   WIN_DISPLAY_MS: 800,
   FAIL_DISPLAY_MS: 900,
@@ -20,10 +20,13 @@ const BW_LEG_GAMES = new Set(['duck', 'balance'])
 
 const SCENES = {
 
-  duck(ctx, progress, cw, ch) {
-    // Flying obstacle coming from right
-    const x = cw * (1 - progress) - 40
-    const y = ch * 0.3
+  duck(ctx, progress, cw, ch, game) {
+    const mg = game?._currentMicrogame
+    const dir = mg?._direction || 'right'
+    const yPos = mg?._yPos || 0.3
+    // Flying obstacle — direction randomised per round
+    const x = dir === 'left' ? cw * progress + 40 : cw * (1 - progress) - 40
+    const y = ch * yPos
     ctx.save()
     ctx.fillStyle = '#ff6b35'
     ctx.beginPath()
@@ -32,10 +35,17 @@ const SCENES = {
     ctx.strokeStyle = '#fff'
     ctx.lineWidth = 4
     ctx.beginPath()
-    ctx.moveTo(x - 12, y - 14)
-    ctx.lineTo(x + 2, y - 2)
-    ctx.lineTo(x - 4, y - 2)
-    ctx.lineTo(x + 10, y + 14)
+    if (dir === 'left') {
+      ctx.moveTo(x + 12, y - 14)
+      ctx.lineTo(x - 2, y - 2)
+      ctx.lineTo(x + 4, y - 2)
+      ctx.lineTo(x - 10, y + 14)
+    } else {
+      ctx.moveTo(x - 12, y - 14)
+      ctx.lineTo(x + 2, y - 2)
+      ctx.lineTo(x - 4, y - 2)
+      ctx.lineTo(x + 10, y + 14)
+    }
     ctx.stroke()
     ctx.restore()
   },
@@ -171,19 +181,81 @@ const SCENES = {
   },
 
   mirror(ctx, progress, cw, ch) {
-    // Mirror reflection hint
+    // T-pose stick figure hint
+    const cx = cw * 0.5
+    const cy = ch * 0.38
+    const s = Math.min(cw, ch) * 0.2
+
     ctx.save()
-    ctx.fillStyle = 'rgba(100,150,255,0.15)'
-    ctx.fillRect(cw / 2 - 2, 0, 4, ch)
-    ctx.strokeStyle = 'rgba(255,255,255,0.45)'
-    ctx.lineWidth = 6
-    ctx.strokeRect(cw * 0.39, ch * 0.16, cw * 0.22, ch * 0.28)
+    ctx.strokeStyle = 'rgba(100,200,255,0.92)'
+    ctx.fillStyle = 'rgba(100,200,255,0.92)'
+    ctx.lineWidth = Math.max(4, s * 0.06)
+    ctx.lineCap = 'round'
+
+    // Head
+    ctx.beginPath()
+    ctx.arc(cx, cy - s * 0.65, s * 0.14, 0, Math.PI * 2)
+    ctx.stroke()
+
+    // Body (neck to hips)
+    ctx.beginPath()
+    ctx.moveTo(cx, cy - s * 0.5)
+    ctx.lineTo(cx, cy + s * 0.38)
+    ctx.stroke()
+
+    // Arms straight out (T-pose)
+    ctx.beginPath()
+    ctx.moveTo(cx - s * 0.7, cy - s * 0.22)
+    ctx.lineTo(cx + s * 0.7, cy - s * 0.22)
+    ctx.stroke()
+    // Wrist dots
+    ctx.beginPath(); ctx.arc(cx - s * 0.7, cy - s * 0.22, s * 0.06, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(cx + s * 0.7, cy - s * 0.22, s * 0.06, 0, Math.PI * 2); ctx.fill()
+
+    // Left leg
+    ctx.beginPath()
+    ctx.moveTo(cx, cy + s * 0.38)
+    ctx.lineTo(cx - s * 0.28, cy + s * 0.86)
+    ctx.stroke()
+
+    // Right leg
+    ctx.beginPath()
+    ctx.moveTo(cx, cy + s * 0.38)
+    ctx.lineTo(cx + s * 0.28, cy + s * 0.86)
+    ctx.stroke()
+
     ctx.restore()
   },
 
   conduct(ctx, progress, cw, ch) {
-    // Music notes floating in the scene
     ctx.save()
+
+    // Pulsing up-arrow hint in the centre
+    const ax = cw * 0.5
+    const arrowBottom = ch * 0.68
+    const arrowTop = ch * 0.42
+    const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 320)
+    ctx.globalAlpha = pulse
+    ctx.strokeStyle = '#FFD700'
+    ctx.fillStyle = '#FFD700'
+    ctx.lineWidth = 6
+    ctx.lineCap = 'round'
+    // Shaft
+    ctx.beginPath()
+    ctx.moveTo(ax, arrowBottom)
+    ctx.lineTo(ax, arrowTop + 22)
+    ctx.stroke()
+    // Arrowhead
+    const hw = 20
+    ctx.beginPath()
+    ctx.moveTo(ax, arrowTop)
+    ctx.lineTo(ax - hw, arrowTop + hw)
+    ctx.lineTo(ax + hw, arrowTop + hw)
+    ctx.closePath()
+    ctx.fill()
+
+    // Music notes floating up
+    ctx.globalAlpha = 1
     for (let i = 0; i < 6; i++) {
       const t = ((Date.now() / 1000 + i * 0.4) % 2) / 2
       const nx = cw * 0.2 + i * (cw * 0.12)
@@ -431,9 +503,16 @@ class BodyWareGame {
     if (this.state === 'FLASH') {
       this._flashTimer -= dt
       if (this._flashTimer <= 0) {
-        const limit = this._currentMicrogame.timeMs || this._currentTimeLimit()
+        // Scale each game's base time by the current level ratio so the
+        // speed curve applies to every microgame proportionally.
+        const mgBase = this._currentMicrogame.timeMs || BW_CONFIG.BASE_TIME_MS
+        const levelRatio = this._currentTimeLimit() / BW_CONFIG.BASE_TIME_MS
+        const limit = Math.max(BW_CONFIG.MIN_TIME_MS, Math.round(mgBase * levelRatio))
         this._activeTimer = limit
         this._activeTotal = limit
+        // Let each microgame know its actual time budget so animations/physics
+        // that use elapsed time can stay in sync with the visual.
+        this._currentMicrogame._totalMs = limit
         this.state = 'ACTIVE'
       }
     } else if (this.state === 'ACTIVE') {
@@ -534,7 +613,7 @@ class BodyWareGame {
       instruction = `PUNCH ${Math.min(3, (this._currentMicrogame._targetsCleared || 0) + 1)}/3`
     }
     if (this._currentMicrogame?.id === 'conduct' && (this.state === 'FLASH' || this.state === 'ACTIVE')) {
-      instruction = `CONDUCT ${Math.min(3, (this._currentMicrogame._cycles || 0) + 1)}/3`
+      instruction = 'CONDUCT!'
     }
 
     let status = ''

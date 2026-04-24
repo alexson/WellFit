@@ -14,18 +14,29 @@ const MICROGAMES = [
     scene: 'duck',
     _heldMs: 0,
     _collided: false,
+    _direction: 'right',   // 'left' | 'right'
+    _yPos: 0.3,            // normalized y position of the obstacle
     reset() {
       this._heldMs = 0
       this._collided = false
+      this._totalMs = null
+      this._direction = Math.random() > 0.5 ? 'left' : 'right'
+      this._yPos = 0.26 + Math.random() * 0.14  // 0.26 – 0.40
     },
     check(angles, kp, baseline, elapsed, dt) {
-      const progress = Math.min(1, elapsed / 3000)
-      const obstacleCenterX = 1 - progress - (40 / 1280)
+      // Use the actual time budget so the hitbox matches the visual position
+      // at every level (visual progress = elapsed / _totalMs via the renderer).
+      const travelMs = this._totalMs || this.timeMs
+      const progress = Math.min(1, elapsed / travelMs)
+      const obstacleCenterX = this._direction === 'left'
+        ? progress + (40 / 1280)
+        : 1 - progress - (40 / 1280)
+      const yPos = this._yPos
       const obstacle = {
         left: obstacleCenterX - (60 / 1280),
         right: obstacleCenterX + (60 / 1280),
-        top: 0.3 - (25 / 720),
-        bottom: 0.3 + (25 / 720),
+        top: yPos - (25 / 720),
+        bottom: yPos + (25 / 720),
       }
 
       const xs = [1 - kp[11].x, 1 - kp[12].x, 1 - kp[13].x, 1 - kp[14].x, 1 - kp[0].x]
@@ -285,8 +296,8 @@ const MICROGAMES = [
   {
     id: 'conduct',
     instruction: { en: 'CONDUCT!' },
-    hint: { en: 'Wave both hands up and down 3 times' },
-    timeMs: 7000,
+    hint: { en: 'Wave both hands up once ↑' },
+    timeMs: 5000,
     scene: 'conduct',
     _L: { dir: 0, reversals: 0, prevY: null },
     _R: { dir: 0, reversals: 0, prevY: null },
@@ -323,7 +334,7 @@ const MICROGAMES = [
         this._cycles = completed
         this._reactionMs = 520
       }
-      return this._cycles >= 3
+      return this._cycles >= 1
     },
   },
 

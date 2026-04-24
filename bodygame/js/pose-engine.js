@@ -559,9 +559,10 @@ class PoseEngine {
     const degToRad = (deg) => deg * Math.PI / 180
 
     // Use a normalized body model: root position and size can be customized.
-    const rootX = cw * (options.anchorX ?? 0.5)
-    const rootY = ch * (options.anchorY ?? 0.6)
     const scale = ch * (options.scaleRatio ?? 0.35)  // body height in pixels
+    // Clamp rootX so the right arm (approx scale*0.85 to the right) stays within the canvas
+    const rootX = Math.min(cw * (options.anchorX ?? 0.5), cw - scale * 0.85)
+    const rootY = ch * (options.anchorY ?? 0.6)
 
     ctx.save()
     ctx.globalAlpha = alpha
