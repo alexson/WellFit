@@ -34,6 +34,7 @@ const opts = {
 // ── Leaderboard helpers ────────────────────────────────────────────────────────
 
 const SCORES_FILE = path.join(__dirname, 'scores.json')
+const FEEDBACK_FILE = path.join(__dirname, 'feedback.json')
 
 const VALID_COUNTRIES = new Set([
   'AF','AL','DZ','AO','AR','AM','AU','AT','AZ','BH','BD','BY','BE','BO','BA',
@@ -59,6 +60,149 @@ function loadScoreData() {
 function saveScoreData(data) {
   if (data.scores.length > 2000) data.scores = data.scores.slice(-2000)
   fs.writeFileSync(SCORES_FILE, JSON.stringify(data))
+}
+
+function loadFeedbackData() {
+  try { return JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf8')) }
+  catch { return { feedback: [] } }
+}
+
+function saveFeedbackData(data) {
+  if (data.feedback.length > 5000) data.feedback = data.feedback.slice(-5000)
+  fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(data))
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]))
+}
+
+function renderFeedbackAdminPage(entries) {
+  const rows = entries.map((entry, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${escapeHtml(entry.page || '-')}</td>
+      <td>${escapeHtml(entry.name || 'Anonymous')}</td>
+      <td class="content-cell">${escapeHtml(entry.content)}</td>
+      <td>${escapeHtml(entry.submittedAt || '-')}</td>
+    </tr>
+  `).join('')
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feedback Admin</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a1226;
+      --panel: rgba(17, 26, 49, 0.94);
+      --line: rgba(255,255,255,0.12);
+      --muted: #90a2c7;
+      --text: #f3f7ff;
+      --accent: #6ee7ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 32px;
+      background:
+        radial-gradient(circle at top left, rgba(110,231,255,0.16), transparent 28%),
+        radial-gradient(circle at top right, rgba(255,141,107,0.15), transparent 24%),
+        linear-gradient(180deg, #0b1020 0%, var(--bg) 100%);
+      color: var(--text);
+      font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    }
+    .shell {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 42px);
+    }
+    .meta {
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+      overflow: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 860px;
+    }
+    th, td {
+      text-align: left;
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    td { color: var(--text); }
+    .content-cell {
+      white-space: pre-wrap;
+      min-width: 320px;
+    }
+    .empty {
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 18px;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <h1>Feedback Admin</h1>
+    <div class="meta">${entries.length} feedback entr${entries.length === 1 ? 'y' : 'ies'} · <a href="/">Back to site</a></div>
+    ${entries.length ? `
+      <section class="panel">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Page</th>
+              <th>Name</th>
+              <th>Content</th>
+              <th>Submitted At</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </section>
+    ` : `
+      <div class="empty">No feedback yet.</div>
+    `}
+  </main>
+</body>
+</html>`
 }
 
 function buildLeaderboard(scores) {
@@ -214,6 +358,64 @@ const server = https.createServer(opts, async (req, res) => {
 
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ ok: true, id }))
+    return
+  }
+
+  // ── API: POST /api/feedback ───────────────────────────────────────────────
+  if (urlPath === '/api/feedback' && req.method === 'POST') {
+    let body
+    try {
+      body = await parseBody(req)
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+      return
+    }
+
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const content = typeof body.content === 'string' ? body.content.trim() : ''
+    const page = typeof body.page === 'string' ? body.page.trim().slice(0, 120) : ''
+
+    if (name.length > 60) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Name too long' }))
+      return
+    }
+
+    if (!content) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Feedback content is required' }))
+      return
+    }
+
+    if (content.length > 3000) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Feedback too long' }))
+      return
+    }
+
+    const data = loadFeedbackData()
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+    data.feedback.push({
+      id,
+      page,
+      name,
+      content,
+      submittedAt: new Date().toISOString(),
+    })
+    saveFeedbackData(data)
+
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true, id }))
+    return
+  }
+
+  // ── Admin: GET /admin/feedback ────────────────────────────────────────────
+  if (urlPath === '/admin/feedback' && req.method === 'GET') {
+    const data = loadFeedbackData()
+    const entries = [...(data.feedback || [])].reverse()
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    res.end(renderFeedbackAdminPage(entries))
     return
   }
 
